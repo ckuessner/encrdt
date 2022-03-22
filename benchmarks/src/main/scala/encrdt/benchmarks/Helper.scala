@@ -10,9 +10,7 @@ import java.security.Security
 import java.util.{Random, UUID}
 
 object Helper {
-
   def uuidKeyValuePairs(size: Int): Array[(String, String)] = {
-    val faker = new Faker(new Random(42))
     val arr = new Array[(String, String)](size)
     for (i <- arr.indices) {
       arr(i) = UUID.randomUUID().toString -> UUID.randomUUID().toString
@@ -30,8 +28,11 @@ object Helper {
   }
 
   def setupAead(keyTemplateString: String): Aead = {
-    Conscrypt.checkAvailability()
-    Security.addProvider(Conscrypt.newProvider)
+    if (Conscrypt.isAvailable) {
+      Conscrypt.checkAvailability()
+      Security.addProvider(Conscrypt.newProvider)
+    } else
+      System.err.println("Conscrypt could not be loaded, continuing anyway")
     AeadConfig.register()
     val keyset: KeysetHandle = KeysetHandle.generateNew(KeyTemplates.get(keyTemplateString))
     keyset.getPrimitive(classOf[Aead])
