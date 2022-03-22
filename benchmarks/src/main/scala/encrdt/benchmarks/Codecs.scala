@@ -3,10 +3,9 @@ package encrdt.benchmarks
 
 import encrdt.benchmarks.todolist.ToDoEntry
 import encrdt.causality.DotStore.{Dot, DotSet}
-import encrdt.causality.LamportClock
+import encrdt.causality.{CausalContext, LamportClock}
 import encrdt.crdts.{AddWinsLastWriterWinsMap, DeltaAddWinsLastWriterWinsMap}
 import encrdt.util.CodecConfig.relaxedJsonCodecConfig
-
 import com.github.plokhotnyuk.jsoniter_scala.core.{JsonKeyCodec, JsonReader, JsonValueCodec, JsonWriter}
 import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 
@@ -22,6 +21,9 @@ object Codecs {
 
   implicit val dotSetCodec: JsonValueCodec[DotSet] =
     JsonCodecMaker.make(relaxedJsonCodecConfig)
+
+  implicit val causalContextCodec: JsonValueCodec[CausalContext] =
+    JsonCodecMaker.make
 
   implicit val dotMapCodec: JsonValueCodec[Map[Dot, (String, (Instant, String))]] = new JsonValueCodec[Map[Dot, (String, (Instant, String))]] {
     override def decodeValue(in: JsonReader, default: Map[Dot, (String, (Instant, String))]): Map[Dot, (String, (Instant, String))] =

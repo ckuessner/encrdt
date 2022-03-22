@@ -6,7 +6,7 @@ import encrdt.benchmarks.mock.UntrustedDeltaBasedReplicaMock
 import encrdt.causality.DotStore.Dot
 import encrdt.causality.LamportClock
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
-import encrdt.encrypted.deltabased.Codecs.dotSetJsonCodec
+import encrdt.encrypted.deltabased.Codecs.causalContextCodec
 import encrdt.encrypted.deltabased.DecryptedDeltaGroup
 
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray

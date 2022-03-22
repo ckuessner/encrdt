@@ -1,15 +1,15 @@
 package de.ckuessner
 package encrdt.benchmarks.mock
 
-import encrdt.benchmarks.Codecs.{dotSetCodec, toDoMapCodec}
+import encrdt.benchmarks.Codecs.{causalContextCodec, dotSetCodec, toDoMapCodec}
 import encrdt.benchmarks.mock.ToDoListClient.{ToDoMapLattice, mergeDecryptedDeltas}
 import encrdt.benchmarks.todolist.ToDoEntry
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap.{DeltaAddWinsLastWriterWinsMapLattice, timestampedValueLattice}
 import encrdt.encrypted.deltabased.{DecryptedDeltaGroup, EncryptedDeltaGroup, TrustedReplica, UntrustedReplica}
 import encrdt.lattices.{Causal, SemiLattice}
-
 import com.google.crypto.tink.Aead
+import de.ckuessner.encrdt.causality.CausalContext
 
 import java.util.UUID
 import scala.collection.mutable
@@ -21,7 +21,7 @@ class ToDoListClient(replicaId: String,
                     ) extends TrustedReplica[ToDoMapLattice](replicaId, crdt, aead) {
 
   private val uuidToDeltaGroupMap: mutable.Map[UUID, DecryptedDeltaGroup[ToDoMapLattice]] = mutable.Map.empty
-  private var cleanupDeltaGroup: DecryptedDeltaGroup[ToDoMapLattice] = DecryptedDeltaGroup(Causal.bottom, Set.empty)
+  private var cleanupDeltaGroup: DecryptedDeltaGroup[ToDoMapLattice] = DecryptedDeltaGroup(Causal.bottom, CausalContext())
 
   override protected def disseminate(encryptedState: EncryptedDeltaGroup): Unit = {
     intermediary.receive(encryptedState)
@@ -71,7 +71,7 @@ class ToDoListClient(replicaId: String,
     val newDelta = uuidToDeltaGroupMap.get(uuid) match {
       case Some(oldUuidDeltaGroup) => DecryptedDeltaGroup(
         SemiLattice[ToDoMapLattice].merged(oldUuidDeltaGroup.deltaGroup, delta),
-        oldUuidDeltaGroup.dottedVersionVector + eventDot
+        oldUuidDeltaGroup.dottedVersionVector.add(eventDot)
       )
 
       case None => DecryptedDeltaGroup(delta, Set(eventDot))

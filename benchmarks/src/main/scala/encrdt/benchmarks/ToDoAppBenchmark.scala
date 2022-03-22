@@ -1,16 +1,12 @@
 package de.ckuessner
 package encrdt.benchmarks
 
-import encrdt.benchmarks.mock.{ToDoListClient, ToDoListIntermediary}
-import encrdt.benchmarks.todolist._
-import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
-
-import com.google.crypto.tink.Aead
-
 import better.files._
+import com.google.crypto.tink.Aead
+import de.ckuessner.encrdt.benchmarks.mock.{ToDoListClient, ToDoListIntermediary}
+import de.ckuessner.encrdt.benchmarks.todolist._
+import de.ckuessner.encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 
-import java.io.PrintWriter
-import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 object ToDoAppBenchmark extends App {
