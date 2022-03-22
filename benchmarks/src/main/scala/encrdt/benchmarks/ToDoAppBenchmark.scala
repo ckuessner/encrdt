@@ -7,6 +7,8 @@ import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 
 import com.google.crypto.tink.Aead
 
+import better.files._
+
 import java.io.PrintWriter
 import java.nio.file.{Files, Paths}
 import java.util.UUID
@@ -26,7 +28,11 @@ object ToDoAppBenchmark extends App {
   val startTime: Long = System.currentTimeMillis()
   var lastCheckPointTime: Long = startTime
 
-  val csvFile = new PrintWriter(Files.newOutputStream(Paths.get("./benchmarks/results/todoapp_benchmark.csv")))
+  val csvFileF = File("./benchmarks/results/todoapp_benchmark.csv")
+  csvFileF.parent.createDirectories()
+
+  val csvFile = csvFileF.newPrintWriter()
+
   csvFile.println("interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos")
 
   interactions.foreach { interaction =>
