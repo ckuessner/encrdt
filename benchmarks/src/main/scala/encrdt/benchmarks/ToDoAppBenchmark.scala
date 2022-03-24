@@ -1,11 +1,12 @@
 package de.ckuessner
 package encrdt.benchmarks
 
+import encrdt.benchmarks.mock.{ToDoListClient, ToDoListIntermediary}
+import encrdt.benchmarks.todolist._
+import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
+
 import better.files._
 import com.google.crypto.tink.Aead
-import de.ckuessner.encrdt.benchmarks.mock.{ToDoListClient, ToDoListIntermediary}
-import de.ckuessner.encrdt.benchmarks.todolist._
-import de.ckuessner.encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 
 import java.util.UUID
 
@@ -14,46 +15,55 @@ object ToDoAppBenchmark extends App {
 
   val intermediaryReplica = new ToDoListIntermediary
 
-  val clientCrdt = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
+  val clientCrdt    = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
   val clientReplica = new ToDoListClient("client", clientCrdt, aead, intermediaryReplica)
 
-  val numInteractions = 100_000
-  private val interactions: Iterable[ToDoListInteraction] = ToDoListInteractionGenerator.generateInteractions(numInteractions)
+  val numInteractions = 1_000_000
+  private val interactions: Iterable[ToDoListInteraction] =
+    ToDoListInteractionGenerator.generateInteractions(numInteractions)
 
-  var counter = 0
-  val startTime: Long = System.currentTimeMillis()
-  var lastCheckPointTime: Long = startTime
-
+  var counter  = 0
   val csvFileF = File("./benchmarks/results/todoapp_benchmark.csv")
   csvFileF.parent.createDirectories()
 
   val csvFile = csvFileF.newPrintWriter()
 
-  csvFile.println("interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos")
+  csvFile.println(
+    "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime"
+  )
+
+  val startNanoTime: Long             = System.nanoTime()
+  var lastCheckPointEndNanoTime: Long = startNanoTime
 
   interactions.foreach { interaction =>
     performInteraction(interaction)
     counter += 1
 
     if (counter % 100 == 0) {
-      val storedDeltasOnIntermediary = intermediaryReplica.numberStoredDeltas
-      val causalitySize = intermediaryReplica.encDeltaCausalityInfoSizeInBytes()
-      val deltaCipherTextSize = intermediaryReplica.rawDeltaCiphertextSizeInBytes()
+      val checkPointStartNanoTime        = System.nanoTime()
+      val nanoTimeForLast100Interactions = checkPointStartNanoTime - lastCheckPointEndNanoTime
 
-      val entries = clientCrdt.values
-      val completedEntries = entries.filter(_._2.completed)
+      val storedDeltasOnIntermediary = intermediaryReplica.numberStoredDeltas
+      val causalitySize              = intermediaryReplica.encDeltaCausalityInfoSizeInBytes()
+      val deltaCipherTextSize        = intermediaryReplica.rawDeltaCiphertextSizeInBytes()
+
+      val entries            = clientCrdt.values
+      val completedEntries   = entries.filter(_._2.completed)
       val uncompletedEntries = entries.filterNot(_._2.completed)
 
-      csvFile.println(s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size}")
-    }
+      csvFile.println(
+        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions"
+      )
 
-    if (counter % 1000 == 0) {
-      println(s"$counter interactions completed / Last 1000 interactions took ${System.currentTimeMillis() - lastCheckPointTime}ms")
-      lastCheckPointTime = System.currentTimeMillis()
+      if (counter % 1_000 == 0) {
+        println(
+          s"$counter interactions completed / Last 100 interactions took ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / 1_000_000.0}ms"
+        )
+      }
+
+      lastCheckPointEndNanoTime = System.nanoTime()
     }
   }
-
-  println(s"Took ${System.currentTimeMillis()-startTime}ms overall")
 
   csvFile.close()
 
