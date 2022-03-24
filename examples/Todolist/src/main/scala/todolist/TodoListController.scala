@@ -1,19 +1,13 @@
 package de.ckuessner
 package todolist
 
-import encrdt.sync.p2p.P2PConnectionManager
-import todolist.SyncedTodoListCrdt.StateType
-
 import com.typesafe.scalalogging.Logger
-import de.ckuessner.encrdt.sync.ConnectionManager
-import de.ckuessner.encrdt.sync.client_server.TrustedReplicaWebSocketClient
 import javafx.collections.{FXCollections, ObservableList}
 import scalafx.application.Platform
 import scalafx.beans.property.ObjectProperty
 
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import scala.collection.convert.ImplicitConversions.`collection asJava`
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -26,7 +20,7 @@ object TodoListController {
 
   def handleUpdated(before: Map[UUID, TodoEntry], after: Map[UUID, TodoEntry]): Unit = {
     Platform.runLater {
-      val added = after.keySet.diff(before.keySet)
+      val added   = after.keySet.diff(before.keySet)
       val removed = before.keySet.diff(after.keySet)
       val changed = (before.keySet -- removed)
         .map { uuid => uuid -> (before(uuid), after(uuid)) }
@@ -34,11 +28,11 @@ object TodoListController {
         .map { case (uuid, (b, a)) => uuid -> a }
 
       uuidToTodoEntryProperties.addAll(added.map(uuid => uuid -> ObjectProperty(after(uuid))))
-      observableUuidList.addAll(added)
+      observableUuidList.addAll(added.asJavaCollection)
 
       changed.foreach { case (k, v) => uuidToTodoEntryProperties(k).set(v) }
 
-      observableUuidList.removeAll(removed)
+      observableUuidList.removeAll(removed.asJavaCollection)
       removed.foreach { uuid =>
         uuidToTodoEntryProperties.remove(uuid)
       }
