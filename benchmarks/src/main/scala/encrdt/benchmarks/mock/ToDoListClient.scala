@@ -1,15 +1,17 @@
 package de.ckuessner
 package encrdt.benchmarks.mock
 
-import encrdt.benchmarks.Codecs.{causalContextCodec, dotSetCodec, toDoMapCodec}
+import encrdt.benchmarks.Codecs.{causalContextCodec, toDoMapCodec}
 import encrdt.benchmarks.mock.ToDoListClient.{ToDoMapLattice, mergeDecryptedDeltas}
 import encrdt.benchmarks.todolist.ToDoEntry
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap.{DeltaAddWinsLastWriterWinsMapLattice, timestampedValueLattice}
 import encrdt.encrypted.deltabased.{DecryptedDeltaGroup, EncryptedDeltaGroup, TrustedReplica, UntrustedReplica}
 import encrdt.lattices.{Causal, SemiLattice}
+
 import com.google.crypto.tink.Aead
-import de.ckuessner.encrdt.causality.CausalContext
+import encrdt.causality.CausalContext
+import encrdt.causality.impl.ArrayCausalContext
 
 import java.util.UUID
 import scala.collection.mutable
@@ -60,7 +62,7 @@ class ToDoListClient(replicaId: String,
 
     val newCleanupDelta = mergeDecryptedDeltas(
       mergeDecryptedDeltas(mergedOldDeltas, cleanupDeltaGroup),
-      DecryptedDeltaGroup(delta, Set(eventDot))
+      DecryptedDeltaGroup(delta, ArrayCausalContext.single(eventDot))
     )
     cleanupDeltaGroup = newCleanupDelta
 
@@ -78,7 +80,7 @@ class ToDoListClient(replicaId: String,
         oldUuidDeltaGroup.dottedVersionVector.add(eventDot)
       )
 
-      case None => DecryptedDeltaGroup(delta, Set(eventDot))
+      case None => DecryptedDeltaGroup(delta, ArrayCausalContext.single(eventDot))
     }
     uuidToDeltaGroupMap.put(uuid, newDelta)
 

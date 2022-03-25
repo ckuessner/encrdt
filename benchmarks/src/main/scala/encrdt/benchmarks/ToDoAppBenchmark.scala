@@ -61,7 +61,7 @@ object ToDoAppBenchmark extends App {
 
       if (counter % 1_000 == 0) {
         println(
-          s"$counter/$numInteractions interactions completed / Last 100 interactions took ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / 1_000_000.0}ms"
+          s"$counter/$numInteractions interactions completed / avg over last 100: ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / (1_000_000.0*100)}ms"
         )
       }
 

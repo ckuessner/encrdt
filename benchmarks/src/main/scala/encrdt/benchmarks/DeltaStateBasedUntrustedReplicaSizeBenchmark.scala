@@ -9,6 +9,7 @@ import encrdt.encrypted.deltabased.DecryptedDeltaGroup
 
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToArray
 import com.google.crypto.tink.Aead
+import de.ckuessner.encrdt.causality.impl.ArrayCausalContext
 
 import java.io.PrintWriter
 import java.nio.file.{Files, Path, Paths}
@@ -32,7 +33,7 @@ object DeltaStateBasedUntrustedReplicaSizeBenchmark extends App with DeltaStateU
     val entry = dummyKeyValuePairs(i)
     benchmarkSharedCurrentDot = benchmarkSharedCurrentDot.advance("0")
     val delta    = benchmarkSharedCrdt.putDelta(entry._1, entry._2)
-    val encDelta = DecryptedDeltaGroup(delta, Set(benchmarkSharedCurrentDot)).encrypt(aead)
+    val encDelta = DecryptedDeltaGroup(delta, ArrayCausalContext.single(benchmarkSharedCurrentDot)).encrypt(aead)
     benchmarkSharedUntrustedReplica.receive(encDelta)
   }
 
@@ -47,7 +48,7 @@ object DeltaStateBasedUntrustedReplicaSizeBenchmark extends App with DeltaStateU
         val entry = dummyKeyValuePairs(i)
         localDot = localDot.advance("0")
         val delta    = crdt.putDelta(entry._1, entry._2)
-        val encDelta = DecryptedDeltaGroup(delta, Set(localDot)).encrypt(aead)
+        val encDelta = DecryptedDeltaGroup(delta, ArrayCausalContext.single(localDot)).encrypt(aead)
         untrustedReplica.receive(encDelta)
       }
 
@@ -59,7 +60,7 @@ object DeltaStateBasedUntrustedReplicaSizeBenchmark extends App with DeltaStateU
         val delta = replicaSpecificCrdt.putDelta(entry._1, entry._2)
         unmergedDeltas = unmergedDeltas :+ delta
         val dot      = LamportClock(1, replicaId.toString)
-        val encState = DecryptedDeltaGroup(delta, Set(dot)).encrypt(aead)
+        val encState = DecryptedDeltaGroup(delta, ArrayCausalContext.single(dot)).encrypt(aead)
         untrustedReplica.receive(encState)
       }
 
@@ -99,7 +100,7 @@ object DeltaStateBasedUntrustedReplicaSizeBenchmarkLinearScaling extends App
     val entry = dummyKeyValuePairs(i)
     val delta = crdt.putDelta(entry._1, entry._2)
     currentDot = currentDot.advance("0")
-    val encDelta = DecryptedDeltaGroup(delta, Set(currentDot)).encrypt(aead)
+    val encDelta = DecryptedDeltaGroup(delta, ArrayCausalContext.single(currentDot)).encrypt(aead)
     untrustedReplica.receive(encDelta)
 
     if ((i + 1) % 1_000 == 0) {
