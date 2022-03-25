@@ -11,23 +11,22 @@ import com.google.crypto.tink.Aead
 import java.util.UUID
 
 object ToDoAppBenchmark extends App {
-  private val aead: Aead = Helper.setupAead("AES128_GCM")
 
-  val intermediaryReplica = new ToDoListIntermediary
+  val numInteractions  = 1_000_000
+  val pruningThreshold = 50
+  val keptToDos        = 20
 
-  val clientCrdt    = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
-  val clientReplica = new ToDoListClient("client", clientCrdt, aead, intermediaryReplica)
-
-  val numInteractions = 1_000_000
   private val interactions: Iterable[ToDoListInteraction] =
-    ToDoListInteractionGenerator.generateInteractions(numInteractions)
+    new ToDoListInteractionGenerator(pruningThreshold, keptToDos).generateInteractions(numInteractions)
 
-  var counter  = 0
+  private val aead: Aead  = Helper.setupAead("AES128_GCM")
+  val intermediaryReplica = new ToDoListIntermediary
+  val clientCrdt          = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
+  val clientReplica       = new ToDoListClient("client", clientCrdt, aead, intermediaryReplica)
+
   val csvFileF = File("./benchmarks/results/todoapp_benchmark.csv")
   csvFileF.parent.createDirectories()
-
   val csvFile = csvFileF.newPrintWriter()
-
   csvFile.println(
     "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime,last100InteractionsDisseminatedBytes"
   )
@@ -36,6 +35,7 @@ object ToDoAppBenchmark extends App {
   var lastCheckPointEndNanoTime: Long          = startNanoTime
   var lastStateOfClientDisseminatedBytes: Long = 0
 
+  var counter = 0
   interactions.foreach { interaction =>
     performInteraction(interaction)
     counter += 1

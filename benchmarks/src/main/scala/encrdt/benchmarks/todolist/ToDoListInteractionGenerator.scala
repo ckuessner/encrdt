@@ -5,14 +5,14 @@ import java.util.UUID
 import scala.collection.mutable
 import scala.util.Random
 
-object ToDoListInteractionGenerator {
+class ToDoListInteractionGenerator(pruningCompletedToDoThreshold: Int = 50, numKeptCompletedToDos: Int = 20) {
   def generateInteractions(numberInteractions: Int): Iterable[ToDoListInteraction] = {
     val random = new Random(42)
     val state = new GeneratorState(random, 70, 140)
 
     0 until numberInteractions map (_ => {
-      if (state.numberOfCurrentlyCompletedEntries >= 50) { // Pruning
-        RemoveToDoItems(state.pruneTodos(30))
+      if (state.numberOfCurrentlyCompletedEntries >= pruningCompletedToDoThreshold) { // Pruning
+        RemoveToDoItems(state.pruneTodos(state.numberOfCurrentlyCompletedEntries - numKeptCompletedToDos))
       } else { // Normal Interactions
         var chosenInteraction: Option[ToDoListInteraction] = None
         while (chosenInteraction.isEmpty) {
