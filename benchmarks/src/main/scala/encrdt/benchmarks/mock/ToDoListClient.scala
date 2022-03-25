@@ -23,7 +23,11 @@ class ToDoListClient(replicaId: String,
   private val uuidToDeltaGroupMap: mutable.Map[UUID, DecryptedDeltaGroup[ToDoMapLattice]] = mutable.Map.empty
   private var cleanupDeltaGroup: DecryptedDeltaGroup[ToDoMapLattice] = DecryptedDeltaGroup(Causal.bottom, CausalContext())
 
+  private var _disseminatedDataInBytes: Long = 0
+  def disseminatedDataInBytes: Long = _disseminatedDataInBytes
+
   override protected def disseminate(encryptedState: EncryptedDeltaGroup): Unit = {
+    _disseminatedDataInBytes += encryptedState.stateCiphertext.length + encryptedState.serialDottedVersionVector.length
     intermediary.receive(encryptedState)
   }
 

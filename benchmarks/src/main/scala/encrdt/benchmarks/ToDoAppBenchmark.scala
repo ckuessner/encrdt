@@ -29,11 +29,12 @@ object ToDoAppBenchmark extends App {
   val csvFile = csvFileF.newPrintWriter()
 
   csvFile.println(
-    "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime"
+    "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime,last100InteractionsDisseminatedBytes"
   )
 
-  val startNanoTime: Long             = System.nanoTime()
-  var lastCheckPointEndNanoTime: Long = startNanoTime
+  val startNanoTime: Long                      = System.nanoTime()
+  var lastCheckPointEndNanoTime: Long          = startNanoTime
+  var lastStateOfClientDisseminatedBytes: Long = 0
 
   interactions.foreach { interaction =>
     performInteraction(interaction)
@@ -42,6 +43,9 @@ object ToDoAppBenchmark extends App {
     if (counter % 100 == 0) {
       val checkPointStartNanoTime        = System.nanoTime()
       val nanoTimeForLast100Interactions = checkPointStartNanoTime - lastCheckPointEndNanoTime
+      val last100InteractionsDisseminatedBytes =
+        clientReplica.disseminatedDataInBytes - lastStateOfClientDisseminatedBytes
+      lastStateOfClientDisseminatedBytes = clientReplica.disseminatedDataInBytes
 
       val storedDeltasOnIntermediary = intermediaryReplica.numberStoredDeltas
       val causalitySize              = intermediaryReplica.encDeltaCausalityInfoSizeInBytes()
@@ -52,12 +56,12 @@ object ToDoAppBenchmark extends App {
       val uncompletedEntries = entries.filterNot(_._2.completed)
 
       csvFile.println(
-        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions"
+        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions,$last100InteractionsDisseminatedBytes"
       )
 
       if (counter % 1_000 == 0) {
         println(
-          s"$counter interactions completed / Last 100 interactions took ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / 1_000_000.0}ms"
+          s"$counter/$numInteractions interactions completed / Last 100 interactions took ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / 1_000_000.0}ms"
         )
       }
 
