@@ -13,7 +13,9 @@ import java.io.PrintWriter
 import java.nio.file.{Files, Paths}
 
 object StateBasedUntrustedReplicaSizeBenchmark extends App {
-  val MAX_TESTED_ELEMENTS = 10_000
+  val minElementExponent = 1 // 10 ** this as minimum tested total elements added to CRDT
+  val maxElementExponent = 3 // 10 ** this as maximum tested total elements added to CRDT
+  val MAX_TESTED_ELEMENTS = Math.pow(10, maxElementExponent).toInt
   val MAX_PARALLEL_UPDATES = 4
 
   val outDir = Paths.get("./benchmarks/results/")
@@ -25,8 +27,6 @@ object StateBasedUntrustedReplicaSizeBenchmark extends App {
   val dummyKeyValuePairs = Helper.dummyKeyValuePairs(MAX_TESTED_ELEMENTS)
   val aead = Helper.setupAead("AES128_GCM")
 
-  val minElementExponent = 4 // 10 ** this as minimum tested total elements added to CRDT
-  val maxElementExponent = 4 // 10 ** this as maximum tested total elements added to CRDT
   for (totalElements <- (minElementExponent to maxElementExponent).map(i => math.pow(10, i).toInt)) {
     val crdt = new DeltaAddWinsLastWriterWinsMap[String, String]("0")
     var versionVector: VectorClock = VectorClock()
