@@ -1,7 +1,7 @@
 package de.ckuessner
 package encrdt.benchmarks
 
-import encrdt.benchmarks.mock.{ToDoListClient, ToDoListIntermediary}
+import encrdt.benchmarks.mock.{DisseminationStats, ToDoListClient, ToDoListIntermediary}
 import encrdt.benchmarks.todolist._
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 
@@ -28,12 +28,12 @@ object ToDoAppBenchmark extends App {
   csvFileF.parent.createDirectories()
   val csvFile = csvFileF.newPrintWriter()
   csvFile.println(
-    "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime,last100InteractionsDisseminatedBytes"
+    "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime,last100InteractionsDisseminatedBytes,last100InteractionsAdditionDisseminatedBytes,last100InteractionsCompletionDisseminatedBytes,last100InteractionsRemovalBytes"
   )
 
-  val startNanoTime: Long                      = System.nanoTime()
-  var lastCheckPointEndNanoTime: Long          = startNanoTime
-  var lastStateOfClientDisseminatedBytes: Long = 0
+  val startNanoTime: Long                        = System.nanoTime()
+  var lastCheckPointEndNanoTime: Long            = startNanoTime
+  var lastDisseminationStats: DisseminationStats = DisseminationStats(0, 0, 0, 0)
 
   var counter = 0
   interactions.foreach { interaction =>
@@ -43,9 +43,8 @@ object ToDoAppBenchmark extends App {
     if (counter % 100 == 0) {
       val checkPointStartNanoTime        = System.nanoTime()
       val nanoTimeForLast100Interactions = checkPointStartNanoTime - lastCheckPointEndNanoTime
-      val last100InteractionsDisseminatedBytes =
-        clientReplica.disseminatedDataInBytes - lastStateOfClientDisseminatedBytes
-      lastStateOfClientDisseminatedBytes = clientReplica.disseminatedDataInBytes
+      val last100DisseminationStatDiff   = clientReplica.disseminationStats - lastDisseminationStats
+      lastDisseminationStats = clientReplica.disseminationStats
 
       val storedDeltasOnIntermediary = intermediaryReplica.numberStoredDeltas
       val causalitySize              = intermediaryReplica.encDeltaCausalityInfoSizeInBytes()
@@ -56,12 +55,12 @@ object ToDoAppBenchmark extends App {
       val uncompletedEntries = entries.filterNot(_._2.completed)
 
       csvFile.println(
-        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions,$last100InteractionsDisseminatedBytes"
+        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions,${last100DisseminationStatDiff.total},${last100DisseminationStatDiff.addition},${last100DisseminationStatDiff.completion},${last100DisseminationStatDiff.removal}"
       )
 
       if (counter % 1_000 == 0) {
         println(
-          s"$counter/$numInteractions interactions completed / avg over last 100: ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / (1_000_000.0*100)}ms"
+          s"$counter/$numInteractions interactions completed / avg over last 100: ${(checkPointStartNanoTime - lastCheckPointEndNanoTime) / (1_000_000.0 * 100)}ms"
         )
       }
 
@@ -70,6 +69,8 @@ object ToDoAppBenchmark extends App {
   }
 
   csvFile.close()
+
+  println("Overall " + clientReplica.disseminationStats)
 
   def performInteraction(interaction: ToDoListInteraction): Unit = interaction match {
     case AddToDoItem(uuid, toDoEntry) =>

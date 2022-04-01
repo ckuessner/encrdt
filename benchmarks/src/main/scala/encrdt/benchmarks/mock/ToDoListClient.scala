@@ -4,29 +4,42 @@ package encrdt.benchmarks.mock
 import encrdt.benchmarks.Codecs.{causalContextCodec, toDoMapCodec}
 import encrdt.benchmarks.mock.ToDoListClient.{ToDoMapLattice, mergeDecryptedDeltas}
 import encrdt.benchmarks.todolist.ToDoEntry
+import encrdt.causality.CausalContext
+import encrdt.causality.impl.ArrayCausalContext
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap.{DeltaAddWinsLastWriterWinsMapLattice, timestampedValueLattice}
 import encrdt.encrypted.deltabased.{DecryptedDeltaGroup, EncryptedDeltaGroup, TrustedReplica, UntrustedReplica}
 import encrdt.lattices.{Causal, SemiLattice}
 
 import com.google.crypto.tink.Aead
-import encrdt.causality.CausalContext
-import encrdt.causality.impl.ArrayCausalContext
 
 import java.util.UUID
 import scala.collection.mutable
 
-class ToDoListClient(replicaId: String,
-                     crdt: DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry],
-                     aead: Aead,
-                     private val intermediary: UntrustedReplica
-                    ) extends TrustedReplica[ToDoMapLattice](replicaId, crdt, aead) {
+class ToDoListClient(
+    replicaId: String,
+    crdt: DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry],
+    aead: Aead,
+    private val intermediary: UntrustedReplica
+) extends TrustedReplica[ToDoMapLattice](replicaId, crdt, aead) {
 
   private val uuidToDeltaGroupMap: mutable.Map[UUID, DecryptedDeltaGroup[ToDoMapLattice]] = mutable.Map.empty
-  private var cleanupDeltaGroup: DecryptedDeltaGroup[ToDoMapLattice] = DecryptedDeltaGroup(Causal.bottom, CausalContext())
+  private var cleanupDeltaGroup: DecryptedDeltaGroup[ToDoMapLattice] =
+    DecryptedDeltaGroup(Causal.bottom, CausalContext())
 
   private var _disseminatedDataInBytes: Long = 0
-  def disseminatedDataInBytes: Long = _disseminatedDataInBytes
+  def disseminatedDataInBytes: Long          = _disseminatedDataInBytes
+
+  private var _disseminatedDataAddition: Long   = 0
+  private var _disseminatedDataCompletion: Long = 0
+  private var _disseminatedDataRemoval: Long    = 0
+
+  def disseminationStats: DisseminationStats = DisseminationStats(
+    _disseminatedDataInBytes,
+    _disseminatedDataAddition,
+    _disseminatedDataCompletion,
+    _disseminatedDataRemoval
+  )
 
   override protected def disseminate(encryptedState: EncryptedDeltaGroup): Unit = {
     _disseminatedDataInBytes += encryptedState.stateCiphertext.length + encryptedState.serialDottedVersionVector.length
@@ -34,21 +47,27 @@ class ToDoListClient(replicaId: String,
   }
 
   def completeToDoItem(uuid: UUID): Unit = {
+    val _disseminatedBefore = _disseminatedDataInBytes
     val delta = crdt.putDelta(
       uuid,
       crdt.get(uuid).get.copy(completed = true)
     )
     localChangeOptimized(delta, uuid)
+    _disseminatedDataCompletion += _disseminatedDataInBytes - _disseminatedBefore
   }
 
   def addToDoItem(uuid: UUID, toDoEntry: ToDoEntry): Unit = {
-    val delta = crdt.putDelta(uuid, toDoEntry)
+    val _disseminatedBefore = _disseminatedDataInBytes
+    val delta               = crdt.putDelta(uuid, toDoEntry)
     localChangeOptimized(delta, uuid)
+    _disseminatedDataAddition += _disseminatedDataInBytes - _disseminatedBefore
   }
 
   def removeToDoItems(uuids: Seq[UUID]): Unit = {
-    val delta = crdt.removeAllDelta(uuids)
+    val _disseminatedBefore = _disseminatedDataInBytes
+    val delta               = crdt.removeAllDelta(uuids)
     localChangeRemovalOptimized(delta, uuids)
+    _disseminatedDataRemoval += _disseminatedDataInBytes - _disseminatedBefore
   }
 
   def localChangeRemovalOptimized(delta: ToDoMapLattice, removedUuids: Seq[UUID]): Unit = {
@@ -76,9 +95,9 @@ class ToDoListClient(replicaId: String,
     // Merge old delta referring to uuid
     val newDelta = uuidToDeltaGroupMap.get(uuid) match {
       case Some(oldUuidDeltaGroup) => DecryptedDeltaGroup(
-        SemiLattice[ToDoMapLattice].merged(oldUuidDeltaGroup.deltaGroup, delta),
-        oldUuidDeltaGroup.dottedVersionVector.add(eventDot)
-      )
+          SemiLattice[ToDoMapLattice].merged(oldUuidDeltaGroup.deltaGroup, delta),
+          oldUuidDeltaGroup.dottedVersionVector.add(eventDot)
+        )
 
       case None => DecryptedDeltaGroup(delta, ArrayCausalContext.single(eventDot))
     }
@@ -94,7 +113,22 @@ class ToDoListClient(replicaId: String,
 object ToDoListClient {
   type ToDoMapLattice = DeltaAddWinsLastWriterWinsMapLattice[UUID, ToDoEntry]
 
-  private def mergeDecryptedDeltas(left: DecryptedDeltaGroup[ToDoMapLattice], right: DecryptedDeltaGroup[ToDoMapLattice]): DecryptedDeltaGroup[ToDoMapLattice] = {
+  private def mergeDecryptedDeltas(
+      left: DecryptedDeltaGroup[ToDoMapLattice],
+      right: DecryptedDeltaGroup[ToDoMapLattice]
+  ): DecryptedDeltaGroup[ToDoMapLattice] = {
     SemiLattice[DecryptedDeltaGroup[ToDoMapLattice]].merged(left, right)
+  }
+}
+
+case class DisseminationStats(total: Long, addition: Long, completion: Long, removal: Long) {
+  def -(other: DisseminationStats): DisseminationStats = other match {
+    case DisseminationStats(otherTotal, otherAddition, otherCompletion, otherRemoval) =>
+      DisseminationStats(
+        total - otherTotal,
+        addition - otherAddition,
+        completion - otherCompletion,
+        removal - otherRemoval
+      )
   }
 }
