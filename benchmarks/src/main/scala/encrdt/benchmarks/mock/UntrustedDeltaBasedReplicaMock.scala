@@ -2,12 +2,12 @@ package de.ckuessner
 package encrdt.benchmarks.mock
 
 import encrdt.benchmarks.Codecs.deltaAwlwwmapJsonCodec
+import encrdt.causality.CausalContext
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 import encrdt.encrypted.deltabased.{EncryptedDeltaGroup, UntrustedReplica}
 
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
 import com.google.crypto.tink.Aead
-import de.ckuessner.encrdt.causality.CausalContext
 
 import java.io.PrintWriter
 import java.nio.file.{Files, Path}
@@ -18,7 +18,7 @@ class UntrustedDeltaBasedReplicaMock extends UntrustedReplica {
 
   def getCausalContext: CausalContext = dottedVersionVector
 
-  def size(): Int = {
+  def size(): Long = {
     encryptedDeltaGroupStore.toList.map { delta =>
       delta.stateCiphertext.length + delta.serialDottedVersionVector.length
     }.sum

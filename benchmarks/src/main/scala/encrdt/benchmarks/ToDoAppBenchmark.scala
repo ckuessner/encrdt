@@ -1,7 +1,9 @@
 package de.ckuessner
 package encrdt.benchmarks
 
-import encrdt.benchmarks.mock.{DisseminationStats, ToDoListClient, ToDoListIntermediary}
+import encrdt.benchmarks.Codecs.toDoMapCodec
+import encrdt.benchmarks.mock._
+import encrdt.benchmarks.mock.insecure.{AlternativeInsecureToDoListClient, AlternativeInsecureToDoListIntermediary}
 import encrdt.benchmarks.todolist._
 import encrdt.crdts.DeltaAddWinsLastWriterWinsMap
 
@@ -12,6 +14,8 @@ import java.util.UUID
 
 object ToDoAppBenchmark extends App {
 
+  val USE_ENCRYPTION = true
+
   val numInteractions  = 1_000_000
   val pruningThreshold = 50
   val keptToDos        = 20
@@ -19,21 +23,36 @@ object ToDoAppBenchmark extends App {
   private val interactions: Iterable[ToDoListInteraction] =
     new ToDoListInteractionGenerator(pruningThreshold, keptToDos).generateInteractions(numInteractions)
 
-  private val aead: Aead  = Helper.setupAead("AES128_GCM")
-  val intermediaryReplica = new ToDoListIntermediary
-  val clientCrdt          = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
-  val clientReplica       = new ToDoListClient("client", clientCrdt, aead, intermediaryReplica)
+  private val clientCrdt = new DeltaAddWinsLastWriterWinsMap[UUID, ToDoEntry]("client")
 
-  val csvFileF = File("./benchmarks/results/todoapp_benchmark.csv")
+  private var intermediarySizeInfo: IntermediarySizeInfo = _
+  private var aead: Aead                                 = _
+  private var clientReplica: ToDoListClient              = _
+
+  if (USE_ENCRYPTION) {
+    aead = Helper.setupAead("AES128_GCM")
+    val intermediaryReplica = new ToDoListIntermediary
+    intermediarySizeInfo = intermediaryReplica
+    clientReplica = new SecureToDoListClient("client", clientCrdt, aead, intermediaryReplica)
+  } else {
+    val intermediaryReplica = new AlternativeInsecureToDoListIntermediary("intermediary")
+    intermediarySizeInfo = intermediaryReplica
+    clientReplica = new AlternativeInsecureToDoListClient("client", clientCrdt, intermediaryReplica)
+  }
+
+  val csvFileF =
+    if (USE_ENCRYPTION) File("./benchmarks/results/todoapp_benchmark.csv")
+    else File("./benchmarks/results/todoapp_benchmark trusted intermediary.csv")
   csvFileF.parent.createDirectories()
   val csvFile = csvFileF.newPrintWriter()
   csvFile.println(
     "interactions,intermediarySize,encDeltaCausalitySize,encDeltaCiphertextSize,intermediaryStoredDeltas,completedToDos,uncompletedToDos,last100InteractionsNanoTime,last100InteractionsDisseminatedBytes,last100InteractionsAdditionDisseminatedBytes,last100InteractionsCompletionDisseminatedBytes,last100InteractionsRemovalBytes"
   )
 
-  val startNanoTime: Long                        = System.nanoTime()
-  var lastCheckPointEndNanoTime: Long            = startNanoTime
   var lastDisseminationStats: DisseminationStats = DisseminationStats(0, 0, 0, 0)
+
+  val startNanoTime: Long             = System.nanoTime()
+  var lastCheckPointEndNanoTime: Long = startNanoTime
 
   var counter = 0
   interactions.foreach { interaction =>
@@ -46,16 +65,16 @@ object ToDoAppBenchmark extends App {
       val last100DisseminationStatDiff   = clientReplica.disseminationStats - lastDisseminationStats
       lastDisseminationStats = clientReplica.disseminationStats
 
-      val storedDeltasOnIntermediary = intermediaryReplica.numberStoredDeltas
-      val causalitySize              = intermediaryReplica.encDeltaCausalityInfoSizeInBytes()
-      val deltaCipherTextSize        = intermediaryReplica.rawDeltaCiphertextSizeInBytes()
+      val storedDeltasOnIntermediary = intermediarySizeInfo.numberStoredDeltas
+      val causalitySize              = intermediarySizeInfo.encDeltaCausalityInfoSizeInBytes
+      val rawDeltaSize               = intermediarySizeInfo.rawDeltasSizeInBytes
 
       val entries            = clientCrdt.values
       val completedEntries   = entries.filter(_._2.completed)
       val uncompletedEntries = entries.filterNot(_._2.completed)
 
       csvFile.println(
-        s"$counter,${causalitySize + deltaCipherTextSize},$causalitySize,$deltaCipherTextSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions,${last100DisseminationStatDiff.total},${last100DisseminationStatDiff.addition},${last100DisseminationStatDiff.completion},${last100DisseminationStatDiff.removal}"
+        s"$counter,${causalitySize + rawDeltaSize},$causalitySize,$rawDeltaSize,$storedDeltasOnIntermediary,${completedEntries.size},${uncompletedEntries.size},$nanoTimeForLast100Interactions,${last100DisseminationStatDiff.total},${last100DisseminationStatDiff.addition},${last100DisseminationStatDiff.completion},${last100DisseminationStatDiff.removal}"
       )
 
       if (counter % 1_000 == 0) {
