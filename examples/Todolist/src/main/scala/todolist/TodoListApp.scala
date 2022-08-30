@@ -1,6 +1,8 @@
 package de.ckuessner
 package todolist
 
+import javafx.scene.{control => jfxsc}
+import javafx.util.Callback
 import scalafx.Includes._
 import scalafx.application.{JFXApp3, Platform}
 import scalafx.scene.Scene
@@ -14,7 +16,9 @@ object TodoListAppPeerToPeer extends TodoListApp
 class TodoListApp extends JFXApp3 {
   override def start(): Unit = {
     val todoListView = new ListView[UUID] {
-      cellFactory = { listView => new TodoItemListCell() }
+      cellFactory = new Callback[jfxsc.ListView[UUID], jfxsc.ListCell[UUID]] {
+        override def call(p: jfxsc.ListView[UUID]): jfxsc.ListCell[UUID] = new TodoItemListCell()
+      }
       items = TodoListController.observableUuidList
     }
 
