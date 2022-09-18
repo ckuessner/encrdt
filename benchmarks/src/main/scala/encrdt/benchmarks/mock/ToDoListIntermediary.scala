@@ -1,9 +1,9 @@
 package de.ckuessner
 package encrdt.benchmarks.mock
 
-import encrdt.encrypted.deltabased.{DeltaPruning, EncryptedDeltaGroup, UntrustedReplica}
+import encrdt.encrypted.deltabased.{EncryptedDeltaGroup, UntrustedReplica}
 
-class ToDoListIntermediary extends UntrustedReplica with DeltaPruning with IntermediarySizeInfo {
+abstract class ToDoListIntermediary extends UntrustedReplica with IntermediarySizeInfo {
   def sizeInBytes: Long = {
     encryptedDeltaGroupStore.iterator.map { encDelta =>
       encDelta.serialDottedVersionVector.length + encDelta.stateCiphertext.length
@@ -19,7 +19,6 @@ class ToDoListIntermediary extends UntrustedReplica with DeltaPruning with Inter
   }
 
   def numberStoredDeltas: Int = encryptedDeltaGroupStore.size
-
 
   override protected def disseminate(encryptedState: EncryptedDeltaGroup): Unit = {}
 }
